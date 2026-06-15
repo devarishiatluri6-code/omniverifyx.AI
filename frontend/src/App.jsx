@@ -24,6 +24,7 @@ function App() {
       <Route path="/admin/exams" element={<AdminExams />} />
       <Route path="/admin/hall-tickets" element={<HallTickets />} />
       <Route path="/admin/live-monitoring" element={<LiveMonitoring />} />
+      <Route path="/analytics" element={<AdminDashboard />} />
     </Routes>
   );
 }

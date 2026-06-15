@@ -75,6 +75,19 @@ def get_embedding(audio):
     return embedding
 
 
+def get_segment_embeddings(audio, segment_len=48000, overlap=24000):
+    if len(audio) < segment_len:
+        return [get_embedding(audio)]
+    embeddings = []
+    step = segment_len - overlap
+    for start in range(0, len(audio) - segment_len + 1, step):
+        segment = audio[start : start + segment_len]
+        embeddings.append(get_embedding(segment))
+    if not embeddings:
+        embeddings.append(get_embedding(audio))
+    return embeddings
+
+
 def verify_voice(
     user_id: str,
     verification_audio_path: str,
@@ -95,7 +108,7 @@ def verify_voice(
             "success": False,
             "match": False,
             "similarity": 0.0,
-            "threshold": VOICE_MATCH_THRESHOLD,
+            "threshold": threshold,
             "message": "Enrolled voice sample not found"
         }
 
@@ -113,7 +126,7 @@ def verify_voice(
                 "success": False,
                 "match": False,
                 "similarity": 0.0,
-                "threshold": VOICE_MATCH_THRESHOLD,
+                "threshold": threshold,
                 "message": "Voice sample too short (min 3s required)"
             }
 
@@ -127,26 +140,32 @@ def verify_voice(
                 "success": False,
                 "match": False,
                 "similarity": 0.0,
-                "threshold": VOICE_MATCH_THRESHOLD,
+                "threshold": threshold,
                 "message": "Voice sample too quiet / silent"
             }
 
-        # Extract embeddings for the entire audios
-        e_emb = get_embedding(enrolled_audio)
-        v_emb = get_embedding(verification_audio)
+        # Extract segment embeddings
+        e_embs = get_segment_embeddings(enrolled_audio)
+        v_embs = get_segment_embeddings(verification_audio)
 
-        # Compute cosine similarity
-        final_similarity = F.cosine_similarity(e_emb, v_emb).item()
+        # Compute cosine similarity between all segment combinations and average them
+        similarities = []
+        for e_emb in e_embs:
+            for v_emb in v_embs:
+                sim = F.cosine_similarity(e_emb, v_emb).item()
+                similarities.append(sim)
+
+        final_similarity = sum(similarities) / len(similarities) if similarities else 0.0
 
         # Match decision
-        match = final_similarity >= VOICE_MATCH_THRESHOLD
+        match = final_similarity >= threshold
 
         # Detailed logging
         print("=" * 50)
         print("VOICE VERIFICATION")
         print(f"User ID: {user_id}")
         print(f"Similarity: {final_similarity:.4f}")
-        print(f"Threshold: {VOICE_MATCH_THRESHOLD}")
+        print(f"Threshold: {threshold}")
         print(f"Match: {match}")
         print("=" * 50)
 
@@ -154,7 +173,7 @@ def verify_voice(
             "success": True,
             "match": match,
             "similarity": round(final_similarity, 4),
-            "threshold": VOICE_MATCH_THRESHOLD,
+            "threshold": threshold,
             "message": "Voice matched" if match else "Voice verification failed"
         }
 
@@ -163,6 +182,6 @@ def verify_voice(
             "success": False,
             "match": False,
             "similarity": 0.0,
-            "threshold": VOICE_MATCH_THRESHOLD,
+            "threshold": threshold,
             "message": f"Voice verification error: {str(e)}"
         }
